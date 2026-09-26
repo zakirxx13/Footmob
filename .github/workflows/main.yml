@@ -8,7 +8,7 @@ on:
     branches: [ main ]
 
 env:
-  TARGET_URL: https://www.fotmob.com/
+  TARGET_URL: https://www.fotmob.com/matches/japan-u23-vs-north-korea-u23/5fehyhkv#6303284
   MAX_PAGES: 50
   TIMEOUT: 30000
 
