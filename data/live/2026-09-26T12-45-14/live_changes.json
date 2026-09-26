@@ -1,0 +1,519 @@
+[
+  {
+    "time": "2026-09-26T12:45:18.910509+00:00",
+    "responseNumber": 1,
+    "changeType": "INITIAL",
+    "snapshot": {
+      "capturedAt": "2026-09-26T12:45:18.947864+00:00",
+      "matchId": "5864708",
+      "teams": {
+        "home": "Brabrand",
+        "away": "Nykøbing FC",
+        "homeId": 8447,
+        "awayId": 457638
+      },
+      "score": {
+        "home": 1,
+        "away": 0,
+        "display": "1 - 0"
+      },
+      "status": {
+        "started": true,
+        "ongoing": true,
+        "finished": false,
+        "cancelled": false
+      },
+      "liveTime": {
+        "short": "46‎’‎",
+        "long": "45:45",
+        "maxTime": 45,
+        "basePeriod": 45,
+        "addedTime": 0
+      },
+      "events": {
+        "count": 1,
+        "items": [
+          {
+            "eventId": 14485222,
+            "type": "Goal",
+            "time": 21,
+            "timeStr": 21,
+            "isHome": true,
+            "player": "<TBD>",
+            "playerId": 0,
+            "newScore": [
+              1,
+              0
+            ],
+            "assist": null,
+            "ownGoal": null,
+            "penalty": false
+          }
+        ]
+      },
+      "dataAvailability": {
+        "stats": false,
+        "playerStats": false,
+        "lineup": false,
+        "shotmap": true,
+        "shotCount": 0
+      },
+      "responseNumber": 1,
+      "responseTime": "2026-09-26T12:45:18.910509+00:00"
+    }
+  },
+  {
+    "time": "2026-09-26T12:45:38.828637+00:00",
+    "responseNumber": 4,
+    "changeType": "CHANGED",
+    "snapshot": {
+      "capturedAt": "2026-09-26T12:45:38.846392+00:00",
+      "matchId": "5864708",
+      "teams": {
+        "home": "Brabrand",
+        "away": "Nykøbing FC",
+        "homeId": 8447,
+        "awayId": 457638
+      },
+      "score": {
+        "home": 1,
+        "away": 0,
+        "display": "1 - 0"
+      },
+      "status": {
+        "started": true,
+        "ongoing": true,
+        "finished": false,
+        "cancelled": false
+      },
+      "liveTime": {
+        "short": "46‎’‎",
+        "long": "45:55",
+        "maxTime": 45,
+        "basePeriod": 45,
+        "addedTime": 0
+      },
+      "events": {
+        "count": 1,
+        "items": [
+          {
+            "eventId": 14485222,
+            "type": "Goal",
+            "time": 21,
+            "timeStr": 21,
+            "isHome": true,
+            "player": "<TBD>",
+            "playerId": 0,
+            "newScore": [
+              1,
+              0
+            ],
+            "assist": null,
+            "ownGoal": null,
+            "penalty": false
+          }
+        ]
+      },
+      "dataAvailability": {
+        "stats": false,
+        "playerStats": false,
+        "lineup": false,
+        "shotmap": true,
+        "shotCount": 0
+      },
+      "responseNumber": 4,
+      "responseTime": "2026-09-26T12:45:38.828637+00:00"
+    }
+  },
+  {
+    "time": "2026-09-26T12:45:48.873430+00:00",
+    "responseNumber": 5,
+    "changeType": "CHANGED",
+    "snapshot": {
+      "capturedAt": "2026-09-26T12:45:48.891891+00:00",
+      "matchId": "5864708",
+      "teams": {
+        "home": "Brabrand",
+        "away": "Nykøbing FC",
+        "homeId": 8447,
+        "awayId": 457638
+      },
+      "score": {
+        "home": 1,
+        "away": 0,
+        "display": "1 - 0"
+      },
+      "status": {
+        "started": true,
+        "ongoing": true,
+        "finished": false,
+        "cancelled": false
+      },
+      "liveTime": {
+        "short": "47‎’‎",
+        "long": "46:05",
+        "maxTime": 45,
+        "basePeriod": 45,
+        "addedTime": 0
+      },
+      "events": {
+        "count": 1,
+        "items": [
+          {
+            "eventId": 14485222,
+            "type": "Goal",
+            "time": 21,
+            "timeStr": 21,
+            "isHome": true,
+            "player": "<TBD>",
+            "playerId": 0,
+            "newScore": [
+              1,
+              0
+            ],
+            "assist": null,
+            "ownGoal": null,
+            "penalty": false
+          }
+        ]
+      },
+      "dataAvailability": {
+        "stats": false,
+        "playerStats": false,
+        "lineup": false,
+        "shotmap": true,
+        "shotCount": 0
+      },
+      "responseNumber": 5,
+      "responseTime": "2026-09-26T12:45:48.873430+00:00"
+    }
+  },
+  {
+    "time": "2026-09-26T12:45:58.918273+00:00",
+    "responseNumber": 6,
+    "changeType": "CHANGED",
+    "snapshot": {
+      "capturedAt": "2026-09-26T12:45:58.940303+00:00",
+      "matchId": "5864708",
+      "teams": {
+        "home": "Brabrand",
+        "away": "Nykøbing FC",
+        "homeId": 8447,
+        "awayId": 457638
+      },
+      "score": {
+        "home": 1,
+        "away": 0,
+        "display": "1 - 0"
+      },
+      "status": {
+        "started": true,
+        "ongoing": true,
+        "finished": false,
+        "cancelled": false
+      },
+      "liveTime": {
+        "short": "47‎’‎",
+        "long": "46:15",
+        "maxTime": 45,
+        "basePeriod": 45,
+        "addedTime": 0
+      },
+      "events": {
+        "count": 1,
+        "items": [
+          {
+            "eventId": 14485222,
+            "type": "Goal",
+            "time": 21,
+            "timeStr": 21,
+            "isHome": true,
+            "player": "<TBD>",
+            "playerId": 0,
+            "newScore": [
+              1,
+              0
+            ],
+            "assist": null,
+            "ownGoal": null,
+            "penalty": false
+          }
+        ]
+      },
+      "dataAvailability": {
+        "stats": false,
+        "playerStats": false,
+        "lineup": false,
+        "shotmap": true,
+        "shotCount": 0
+      },
+      "responseNumber": 6,
+      "responseTime": "2026-09-26T12:45:58.918273+00:00"
+    }
+  },
+  {
+    "time": "2026-09-26T12:46:08.966601+00:00",
+    "responseNumber": 7,
+    "changeType": "CHANGED",
+    "snapshot": {
+      "capturedAt": "2026-09-26T12:46:08.982652+00:00",
+      "matchId": "5864708",
+      "teams": {
+        "home": "Brabrand",
+        "away": "Nykøbing FC",
+        "homeId": 8447,
+        "awayId": 457638
+      },
+      "score": {
+        "home": 1,
+        "away": 0,
+        "display": "1 - 0"
+      },
+      "status": {
+        "started": true,
+        "ongoing": true,
+        "finished": false,
+        "cancelled": false
+      },
+      "liveTime": {
+        "short": "47‎’‎",
+        "long": "46:26",
+        "maxTime": 45,
+        "basePeriod": 45,
+        "addedTime": 0
+      },
+      "events": {
+        "count": 1,
+        "items": [
+          {
+            "eventId": 14485222,
+            "type": "Goal",
+            "time": 21,
+            "timeStr": 21,
+            "isHome": true,
+            "player": "<TBD>",
+            "playerId": 0,
+            "newScore": [
+              1,
+              0
+            ],
+            "assist": null,
+            "ownGoal": null,
+            "penalty": false
+          }
+        ]
+      },
+      "dataAvailability": {
+        "stats": false,
+        "playerStats": false,
+        "lineup": false,
+        "shotmap": true,
+        "shotCount": 0
+      },
+      "responseNumber": 7,
+      "responseTime": "2026-09-26T12:46:08.966601+00:00"
+    }
+  },
+  {
+    "time": "2026-09-26T12:46:19.138729+00:00",
+    "responseNumber": 8,
+    "changeType": "CHANGED",
+    "snapshot": {
+      "capturedAt": "2026-09-26T12:46:19.156889+00:00",
+      "matchId": "5864708",
+      "teams": {
+        "home": "Brabrand",
+        "away": "Nykøbing FC",
+        "homeId": 8447,
+        "awayId": 457638
+      },
+      "score": {
+        "home": 1,
+        "away": 0,
+        "display": "1 - 0"
+      },
+      "status": {
+        "started": true,
+        "ongoing": true,
+        "finished": false,
+        "cancelled": false
+      },
+      "liveTime": {
+        "short": "47‎’‎",
+        "long": "46:46",
+        "maxTime": 45,
+        "basePeriod": 45,
+        "addedTime": 0
+      },
+      "events": {
+        "count": 1,
+        "items": [
+          {
+            "eventId": 14485222,
+            "type": "Goal",
+            "time": 21,
+            "timeStr": 21,
+            "isHome": true,
+            "player": "<TBD>",
+            "playerId": 0,
+            "newScore": [
+              1,
+              0
+            ],
+            "assist": null,
+            "ownGoal": null,
+            "penalty": false
+          }
+        ]
+      },
+      "dataAvailability": {
+        "stats": false,
+        "playerStats": false,
+        "lineup": false,
+        "shotmap": true,
+        "shotCount": 0
+      },
+      "responseNumber": 8,
+      "responseTime": "2026-09-26T12:46:19.138729+00:00"
+    }
+  },
+  {
+    "time": "2026-09-26T12:46:39.165861+00:00",
+    "responseNumber": 11,
+    "changeType": "CHANGED",
+    "snapshot": {
+      "capturedAt": "2026-09-26T12:46:39.184955+00:00",
+      "matchId": "5864708",
+      "teams": {
+        "home": "Brabrand",
+        "away": "Nykøbing FC",
+        "homeId": 8447,
+        "awayId": 457638
+      },
+      "score": {
+        "home": 1,
+        "away": 0,
+        "display": "1 - 0"
+      },
+      "status": {
+        "started": true,
+        "ongoing": true,
+        "finished": false,
+        "cancelled": false
+      },
+      "liveTime": {
+        "short": "47‎’‎",
+        "long": "46:56",
+        "maxTime": 45,
+        "basePeriod": 45,
+        "addedTime": 0
+      },
+      "events": {
+        "count": 1,
+        "items": [
+          {
+            "eventId": 14485222,
+            "type": "Goal",
+            "time": 21,
+            "timeStr": 21,
+            "isHome": true,
+            "player": "<TBD>",
+            "playerId": 0,
+            "newScore": [
+              1,
+              0
+            ],
+            "assist": null,
+            "ownGoal": null,
+            "penalty": false
+          }
+        ]
+      },
+      "dataAvailability": {
+        "stats": false,
+        "playerStats": false,
+        "lineup": false,
+        "shotmap": true,
+        "shotCount": 0
+      },
+      "responseNumber": 11,
+      "responseTime": "2026-09-26T12:46:39.165861+00:00"
+    }
+  },
+  {
+    "time": "2026-09-26T12:46:49.187882+00:00",
+    "responseNumber": 12,
+    "changeType": "CHANGED",
+    "snapshot": {
+      "capturedAt": "2026-09-26T12:46:49.209691+00:00",
+      "matchId": "5864708",
+      "teams": {
+        "home": "Brabrand",
+        "away": "Nykøbing FC",
+        "homeId": 8447,
+        "awayId": 457638
+      },
+      "score": {
+        "home": 1,
+        "away": 0,
+        "display": "1 - 0"
+      },
+      "status": {
+        "started": true,
+        "ongoing": true,
+        "finished": false,
+        "cancelled": false
+      },
+      "liveTime": {
+        "short": "HT",
+        "long": "Half-Time",
+        "maxTime": 45,
+        "basePeriod": 45,
+        "addedTime": 0
+      },
+      "events": {
+        "count": 2,
+        "items": [
+          {
+            "eventId": null,
+            "type": "Half",
+            "time": 45,
+            "timeStr": 45,
+            "isHome": null,
+            "player": null,
+            "playerId": null,
+            "newScore": null,
+            "assist": null,
+            "ownGoal": null,
+            "penalty": null
+          },
+          {
+            "eventId": 14485222,
+            "type": "Goal",
+            "time": 21,
+            "timeStr": 21,
+            "isHome": true,
+            "player": "<TBD>",
+            "playerId": 0,
+            "newScore": [
+              1,
+              0
+            ],
+            "assist": null,
+            "ownGoal": null,
+            "penalty": false
+          }
+        ]
+      },
+      "dataAvailability": {
+        "stats": false,
+        "playerStats": false,
+        "lineup": false,
+        "shotmap": true,
+        "shotCount": 0
+      },
+      "responseNumber": 12,
+      "responseTime": "2026-09-26T12:46:49.187882+00:00"
+    }
+  }
+]
