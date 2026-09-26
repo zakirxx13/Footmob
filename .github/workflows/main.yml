@@ -1,1 +1,219 @@
 
+name: FotMob Live Data Monitor
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: write
+
+jobs:
+
+  monitor:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ============================================
+      # 1. Checkout
+      # ============================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ============================================
+      # 2. Setup Python
+      # ============================================
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+
+      # ============================================
+      # 3. Install Playwright
+      # ============================================
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install playwright
+
+
+      # ============================================
+      # 4. Install Chromium
+      # ============================================
+
+      - name: Install Chromium
+        run: |
+          python -m playwright install chromium
+          python -m playwright install-deps chromium
+
+
+      # ============================================
+      # 5. Check Python file
+      # ============================================
+
+      - name: Check f.py
+        run: |
+          echo "Checking scripts/f.py..."
+
+          test -f scripts/f.py
+
+          python -m py_compile scripts/f.py
+
+          echo "f.py syntax is valid."
+
+
+      # ============================================
+      # 6. Run FotMob monitor
+      # ============================================
+
+      - name: Run FotMob monitor
+        run: |
+          echo "Starting FotMob monitor..."
+          python scripts/f.py
+
+
+      # ============================================
+      # 7. Show summary
+      # ============================================
+
+      - name: Show summary
+        if: always()
+        run: |
+
+          echo "=============================================="
+          echo "FOTMOB LIVE MONITOR SUMMARY"
+          echo "=============================================="
+
+          if [ -f data/latest/live_change_summary.json ]; then
+
+            cat data/latest/live_change_summary.json
+
+          else
+
+            echo "live_change_summary.json not found."
+
+          fi
+
+
+      # ============================================
+      # 8. Show live changes
+      # ============================================
+
+      - name: Show live changes
+        if: always()
+        run: |
+
+          echo "=============================================="
+          echo "FOTMOB LIVE CHANGES"
+          echo "=============================================="
+
+          if [ -f data/latest/live_changes.json ]; then
+
+            cat data/latest/live_changes.json
+
+          else
+
+            echo "live_changes.json not found."
+
+          fi
+
+
+      # ============================================
+      # 9. Show endpoint structure
+      # ============================================
+
+      - name: Show endpoint structure
+        if: always()
+        run: |
+
+          echo "=============================================="
+          echo "FOTMOB ENDPOINT STRUCTURE"
+          echo "=============================================="
+
+          if [ -f data/latest/endpoint_structure.json ]; then
+
+            cat data/latest/endpoint_structure.json
+
+          else
+
+            echo "endpoint_structure.json not found."
+
+          fi
+
+
+      # ============================================
+      # 10. Show errors
+      # ============================================
+
+      - name: Show errors
+        if: always()
+        run: |
+
+          echo "=============================================="
+          echo "FOTMOB RESPONSE ERRORS"
+          echo "=============================================="
+
+          if [ -f data/latest/response_errors.json ]; then
+
+            cat data/latest/response_errors.json
+
+          else
+
+            echo "response_errors.json not found."
+
+          fi
+
+
+      # ============================================
+      # 11. Commit generated data
+      # ============================================
+
+      - name: Commit generated data
+        if: always()
+        run: |
+
+          git config user.name "github-actions[bot]"
+
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/
+
+          if git diff --cached --quiet; then
+
+            echo "No changes to commit."
+
+          else
+
+            git commit -m "Update FotMob live data"
+
+            git push
+
+          fi
+
+
+      # ============================================
+      # 12. Upload artifacts
+      # ============================================
+
+      - name: Upload monitoring data
+        if: always()
+        uses: actions/upload-artifact@v4
+
+        with:
+
+          name: fotmob-live-monitor
+
+          path: |
+            data/latest/
+            data/live/
+
+          retention-days: 7
