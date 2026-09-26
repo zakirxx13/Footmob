@@ -1,0 +1,93 @@
+{
+  "targetUrl": "https://www.fotmob.com/matches/brabrand-vs-nykobing-fc/1dwc9ldq#5864708",
+  "matchId": "5864708",
+  "monitorSeconds": 120,
+  "startedAt": "2026-09-26T12-36-19",
+  "finishedAt": "2026-09-26T12:38:32.375406+00:00",
+  "totalRequests": 989,
+  "totalResponses": 958,
+  "totalResponseBodies": 261,
+  "websocketConnections": 0,
+  "uniqueResponseUrls": 399,
+  "matchDetailsResponses": 15,
+  "matchDetailsUpdates": [
+    {
+      "time": "2026-09-26T12:36:22.432703+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:36:34.281469+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:36:38.134027+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:36:46.654802+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:36:46.695272+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:36:56.706237+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:37:06.777687+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:37:16.822454+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:37:26.865846+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:37:36.906504+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:37:46.948883+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:37:56.988235+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:38:07.048431+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:38:17.088922+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    },
+    {
+      "time": "2026-09-26T12:38:27.130852+00:00",
+      "status": 200,
+      "url": "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+    }
+  ],
+  "matchDetailsUrls": [
+    "https://www.fotmob.com/api/data/matchDetails?matchId=5864708"
+  ]
+}
