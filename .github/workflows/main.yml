@@ -1,1 +1,681 @@
+name: FotMob Live Match Data Discovery
 
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+env:
+  TARGET_URL: https://www.fotmob.com/matches/japan-u23-vs-north-korea-u23/5fehyhkv#6303284
+  MATCH_ID: "6303284"
+  TIMEOUT: "60000"
+
+jobs:
+  discover-live-data:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+
+      # ==========================================
+      # 1. CHECKOUT
+      # ==========================================
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ==========================================
+      # 2. NODE.JS
+      # ==========================================
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # ==========================================
+      # 3. INSTALL PLAYWRIGHT
+      # ==========================================
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install playwright
+          npx playwright install chromium
+          npx playwright install-deps chromium
+
+      # ==========================================
+      # 4. CREATE SCRAPER
+      # ==========================================
+      - name: Create Live Match Scraper
+        run: |
+          cat > scraper.js <<'EOF'
+
+          const { chromium } = require('playwright');
+          const fs = require('fs');
+
+          const TARGET_URL = process.env.TARGET_URL;
+          const MATCH_ID = process.env.MATCH_ID;
+          const TIMEOUT = parseInt(process.env.TIMEOUT || '60000');
+
+          const responses = [];
+          const apiUrls = new Set();
+
+          function isInteresting(url, contentType) {
+
+            const lower = url.toLowerCase();
+
+            const urlKeywords = [
+              'api',
+              'match',
+              'matches',
+              'event',
+              'events',
+              'live',
+              'fixture',
+              'score',
+              'team',
+              'player',
+              'league',
+              'lineup',
+              'stats',
+              'commentary',
+              'incident',
+              'feed',
+              'json'
+            ];
+
+            const contentIsJson =
+              contentType &&
+              (
+                contentType.includes('application/json') ||
+                contentType.includes('application/graphql') ||
+                contentType.includes('text/json')
+              );
+
+            const urlIsInteresting =
+              urlKeywords.some(keyword => lower.includes(keyword));
+
+            return contentIsJson || urlIsInteresting;
+          }
+
+          async function main() {
+
+            console.log('==========================================');
+            console.log('FotMob Live Match Data Discovery');
+            console.log('==========================================');
+
+            console.log('Target:', TARGET_URL);
+            console.log('Match ID:', MATCH_ID);
+
+            const browser = await chromium.launch({
+              headless: true,
+              args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage'
+              ]
+            });
+
+            const context = await browser.newContext({
+              userAgent:
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) ' +
+                'AppleWebKit/537.36 (KHTML, like Gecko) ' +
+                'Chrome/128.0.0.0 Safari/537.36',
+              viewport: {
+                width: 1440,
+                height: 900
+              }
+            });
+
+            const page = await context.newPage();
+
+            // ==========================================
+            // REQUEST LISTENER
+            // ==========================================
+
+            page.on('request', request => {
+
+              const type = request.resourceType();
+              const url = request.url();
+
+              if (
+                type === 'xhr' ||
+                type === 'fetch' ||
+                type === 'websocket'
+              ) {
+
+                apiUrls.add(url);
+
+                console.log(
+                  `[REQUEST] ${type} ${request.method()} ${url}`
+                );
+              }
+            });
+
+            // ==========================================
+            // RESPONSE LISTENER
+            // ==========================================
+
+            page.on('response', async response => {
+
+              try {
+
+                const request = response.request();
+                const url = response.url();
+                const type = request.resourceType();
+
+                const headers = response.headers();
+
+                const contentType =
+                  headers['content-type'] || '';
+
+                if (!isInteresting(url, contentType)) {
+                  return;
+                }
+
+                console.log(
+                  `[RESPONSE] ${response.status()} ${contentType} ${url}`
+                );
+
+                let body = null;
+
+                // Only try to read textual/json responses
+                if (
+                  contentType.includes('json') ||
+                  contentType.includes('text') ||
+                  contentType.includes('javascript')
+                ) {
+
+                  try {
+                    body = await response.text();
+
+                    // Don't store huge responses
+                    if (body.length > 1000000) {
+                      body = body.substring(0, 1000000);
+                    }
+
+                  } catch (err) {
+
+                    console.log(
+                      'Could not read response:',
+                      err.message
+                    );
+
+                  }
+                }
+
+                responses.push({
+                  url,
+                  status: response.status(),
+                  method: request.method(),
+                  resourceType: type,
+                  contentType,
+                  requestHeaders: request.headers(),
+                  responseHeaders: headers,
+                  body,
+                  timestamp: new Date().toISOString()
+                });
+
+              } catch (err) {
+
+                console.log(
+                  'Response processing error:',
+                  err.message
+                );
+
+              }
+
+            });
+
+            // ==========================================
+            // PAGE LOAD
+            // ==========================================
+
+            console.log('');
+            console.log('Loading FotMob page...');
+
+            try {
+
+              await page.goto(TARGET_URL, {
+                waitUntil: 'domcontentloaded',
+                timeout: TIMEOUT
+              });
+
+            } catch (err) {
+
+              console.log(
+                'Initial navigation warning:',
+                err.message
+              );
+
+            }
+
+            // ==========================================
+            // WAIT FOR JS
+            // ==========================================
+
+            console.log('Waiting for live data...');
+
+            await page.waitForTimeout(10000);
+
+            // ==========================================
+            // SCROLL
+            // ==========================================
+
+            console.log('Scrolling page...');
+
+            await page.evaluate(async () => {
+
+              for (let i = 0; i < 5; i++) {
+
+                window.scrollBy(
+                  0,
+                  window.innerHeight
+                );
+
+                await new Promise(
+                  resolve => setTimeout(resolve, 1000)
+                );
+
+              }
+
+              window.scrollTo(0, 0);
+
+            });
+
+            await page.waitForTimeout(5000);
+
+            // ==========================================
+            // PAGE DATA
+            // ==========================================
+
+            const pageData = await page.evaluate(() => {
+
+              const text =
+                document.body
+                  ? document.body.innerText
+                  : '';
+
+              return {
+
+                title: document.title,
+
+                url: window.location.href,
+
+                text: text.substring(0, 50000),
+
+                headings:
+                  Array.from(
+                    document.querySelectorAll(
+                      'h1,h2,h3,h4'
+                    )
+                  ).map(
+                    x => x.innerText.trim()
+                  ),
+
+                scripts:
+                  Array.from(
+                    document.querySelectorAll('script')
+                  )
+                  .map(
+                    x => x.src || ''
+                  )
+                  .filter(Boolean),
+
+                links:
+                  Array.from(
+                    document.querySelectorAll('a[href]')
+                  )
+                  .map(
+                    x => x.href
+                  )
+                  .filter(Boolean)
+
+              };
+
+            });
+
+            // ==========================================
+            // EXTRACT POSSIBLE JSON FROM HTML
+            // ==========================================
+
+            const html = await page.content();
+
+            const embeddedJson = [];
+
+            const scriptTexts =
+              await page.locator('script').allTextContents();
+
+            for (const script of scriptTexts) {
+
+              if (!script || script.length < 20) {
+                continue;
+              }
+
+              if (
+                script.includes('match') ||
+                script.includes('Match') ||
+                script.includes('6303284') ||
+                script.includes('__NEXT_DATA__')
+              ) {
+
+                embeddedJson.push(
+                  script.substring(0, 100000)
+                );
+
+              }
+
+            }
+
+            // ==========================================
+            // SAVE
+            // ==========================================
+
+            if (!fs.existsSync('data')) {
+              fs.mkdirSync('data');
+            }
+
+            const timestamp =
+              new Date()
+                .toISOString()
+                .replace(/[:.]/g, '-');
+
+            const outputDir =
+              `data/${timestamp}`;
+
+            fs.mkdirSync(
+              outputDir,
+              {
+                recursive: true
+              }
+            );
+
+            // ------------------------------------------
+            // Network responses
+            // ------------------------------------------
+
+            fs.writeFileSync(
+              `${outputDir}/network_responses.json`,
+              JSON.stringify(
+                responses,
+                null,
+                2
+              )
+            );
+
+            // ------------------------------------------
+            // API URLs
+            // ------------------------------------------
+
+            fs.writeFileSync(
+              `${outputDir}/api_urls.json`,
+              JSON.stringify(
+                Array.from(apiUrls),
+                null,
+                2
+              )
+            );
+
+            // ------------------------------------------
+            // Page data
+            // ------------------------------------------
+
+            fs.writeFileSync(
+              `${outputDir}/page_data.json`,
+              JSON.stringify(
+                pageData,
+                null,
+                2
+              )
+            );
+
+            // ------------------------------------------
+            // Embedded JSON/scripts
+            // ------------------------------------------
+
+            fs.writeFileSync(
+              `${outputDir}/embedded_data.json`,
+              JSON.stringify(
+                embeddedJson,
+                null,
+                2
+              )
+            );
+
+            // ------------------------------------------
+            // Summary
+            // ------------------------------------------
+
+            const summary = {
+
+              scrapedAt:
+                new Date().toISOString(),
+
+              targetUrl:
+                TARGET_URL,
+
+              matchId:
+                MATCH_ID,
+
+              apiRequests:
+                apiUrls.size,
+
+              capturedResponses:
+                responses.length,
+
+              jsonResponses:
+                responses.filter(
+                  x =>
+                    x.contentType &&
+                    x.contentType.includes('json')
+                ).length,
+
+              files: [
+                'network_responses.json',
+                'api_urls.json',
+                'page_data.json',
+                'embedded_data.json'
+              ]
+
+            };
+
+            fs.writeFileSync(
+              `${outputDir}/summary.json`,
+              JSON.stringify(
+                summary,
+                null,
+                2
+              )
+            );
+
+            // ==========================================
+            // UPDATE LATEST
+            // ==========================================
+
+            const latest =
+              'data/latest';
+
+            if (fs.existsSync(latest)) {
+
+              fs.rmSync(
+                latest,
+                {
+                  recursive: true,
+                  force: true
+                }
+              );
+
+            }
+
+            fs.cpSync(
+              outputDir,
+              latest,
+              {
+                recursive: true
+              }
+            );
+
+            // ==========================================
+            // PRINT RESULT
+            // ==========================================
+
+            console.log('');
+            console.log('==========================================');
+            console.log('SCRAPING COMPLETE');
+            console.log('==========================================');
+
+            console.log(
+              'API Requests:',
+              apiUrls.size
+            );
+
+            console.log(
+              'Captured Responses:',
+              responses.length
+            );
+
+            console.log(
+              'JSON Responses:',
+              summary.jsonResponses
+            );
+
+            console.log(
+              'Output:',
+              outputDir
+            );
+
+            console.log('==========================================');
+
+            await browser.close();
+
+          }
+
+          main().catch(error => {
+
+            console.error(
+              'FATAL ERROR:',
+              error
+            );
+
+            process.exit(1);
+
+          });
+
+          EOF
+
+      # ==========================================
+      # 5. RUN SCRAPER
+      # ==========================================
+      - name: Run Live Data Discovery
+        run: |
+          node scraper.js
+
+      # ==========================================
+      # 6. SHOW DISCOVERED ENDPOINTS
+      # ==========================================
+      - name: Show Discovered APIs
+        run: |
+
+          echo "=========================================="
+          echo "DISCOVERED API URLS"
+          echo "=========================================="
+
+          if [ -f data/latest/api_urls.json ]; then
+
+            cat data/latest/api_urls.json
+
+          else
+
+            echo "No API URL file found"
+
+          fi
+
+          echo ""
+          echo "=========================================="
+          echo "SUMMARY"
+          echo "=========================================="
+
+          if [ -f data/latest/summary.json ]; then
+
+            cat data/latest/summary.json
+
+          fi
+
+      # ==========================================
+      # 7. GITHUB SUMMARY
+      # ==========================================
+      - name: GitHub Actions Summary
+        run: |
+
+          echo "# ⚽ FotMob Live Match Discovery" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f data/latest/summary.json ]; then
+
+            APIS=$(jq '.apiRequests' data/latest/summary.json)
+            RESPONSES=$(jq '.capturedResponses' data/latest/summary.json)
+            JSONS=$(jq '.jsonResponses' data/latest/summary.json)
+
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|---|---:|" >> $GITHUB_STEP_SUMMARY
+            echo "| API Requests | $APIS |" >> $GITHUB_STEP_SUMMARY
+            echo "| Captured Responses | $RESPONSES |" >> $GITHUB_STEP_SUMMARY
+            echo "| JSON Responses | $JSONS |" >> $GITHUB_STEP_SUMMARY
+            echo "| Match ID | ${{ env.MATCH_ID }} |" >> $GITHUB_STEP_SUMMARY
+
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "## API URLs" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f data/latest/api_urls.json ]; then
+
+            jq -r '.[]' data/latest/api_urls.json |
+            head -30 |
+            while read url; do
+
+              echo "- \`$url\`" >> $GITHUB_STEP_SUMMARY
+
+            done
+
+          fi
+
+      # ==========================================
+      # 8. UPLOAD ARTIFACT
+      # ==========================================
+      - name: Upload Scraping Data
+        uses: actions/upload-artifact@v4
+        with:
+          name: fotmob-live-match-data
+          path: data/
+          retention-days: 7
+
+      # ==========================================
+      # 9. COMMIT DATA
+      # ==========================================
+      - name: Commit Results
+        run: |
+
+          git config user.name "FotMob Data Bot"
+          git config user.email "actions@github.com"
+
+          git add data/
+
+          if git diff --cached --quiet; then
+
+            echo "No changes detected."
+
+          else
+
+            git commit \
+              -m "Auto: update FotMob live match data [skip ci]"
+
+            git push
+
+          fi
