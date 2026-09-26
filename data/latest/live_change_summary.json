@@ -1,0 +1,17 @@
+{
+  "targetUrl": "https://www.fotmob.com/matches/brabrand-vs-nykobing-fc/1dwc9ldq#5864708",
+  "matchId": "5864708",
+  "monitorSeconds": 120,
+  "finishedAt": "2026-09-26T12:56:24.778488+00:00",
+  "matchDetailsResponses": 14,
+  "snapshotsCaptured": 13,
+  "changesDetected": 13,
+  "uniqueJsonPaths": 372,
+  "errors": 0,
+  "files": {
+    "snapshots": "data/live/2026-09-26T12-54-12/live_snapshots.json",
+    "changes": "data/live/2026-09-26T12-54-12/live_changes.json",
+    "structure": "data/live/2026-09-26T12-54-12/endpoint_structure.json",
+    "errors": "data/live/2026-09-26T12-54-12/response_errors.json"
+  }
+}
