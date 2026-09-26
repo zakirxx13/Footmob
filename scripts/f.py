@@ -1,1041 +1,515 @@
 import asyncio
 import json
 import os
+import re
+import shutil
 from datetime import datetime, timezone
-from pathlib import Path
 
 from playwright.async_api import async_playwright
 
 
-# =========================================================
+# ============================================================
 # CONFIG
-# =========================================================
+# ============================================================
 
-TARGET_URL = os.getenv(
-    "TARGET_URL",
-    "https://www.fotmob.com/matches/brabrand-vs-nykobing-fc/1dwc9ldq#5864708"
-)
+TARGET_URL = "https://www.fotmob.com/matches/brabrand-vs-nykobing-fc/1dwc9ldq#5864708"
+MATCH_ID = "5864708"
 
-MATCH_ID = os.getenv(
-    "MATCH_ID",
-    "5864708"
-)
+MONITOR_SECONDS = 120
 
-MONITOR_SECONDS = int(
-    os.getenv(
-        "MONITOR_SECONDS",
-        "120"
-    )
-)
+BASE_DIR = "data"
+LIVE_DIR = os.path.join(BASE_DIR, "live")
+LATEST_DIR = os.path.join(BASE_DIR, "latest")
+
+os.makedirs(LIVE_DIR, exist_ok=True)
+os.makedirs(LATEST_DIR, exist_ok=True)
 
 
-# =========================================================
-# DIRECTORIES
-# =========================================================
+# ============================================================
+# HELPERS
+# ============================================================
 
-ROOT = Path.cwd()
-
-LATEST_DIR = ROOT / "data" / "latest"
-LIVE_DIR = ROOT / "data" / "live"
-
-LATEST_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
-
-LIVE_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
 
 
-# =========================================================
-# TIME
-# =========================================================
-
-def now():
-    return datetime.now(
-        timezone.utc
-    ).isoformat()
+def safe_json_loads(text):
+    try:
+        return json.loads(text)
+    except Exception:
+        return None
 
 
-# =========================================================
-# CHECK INTERESTING REQUEST
-# =========================================================
+def get_nested(data, *keys, default=None):
+    current = data
 
-def is_interesting(
-    url,
-    resource_type
-):
+    for key in keys:
+        if not isinstance(current, dict):
+            return default
 
-    url_lower = url.lower()
+        current = current.get(key)
 
-    # XHR / Fetch / WebSocket
-    if resource_type in [
-        "xhr",
-        "fetch",
-        "websocket"
-    ]:
-        return True
+        if current is None:
+            return default
 
-    # Important live API keywords
-    keywords = [
-        "/api/",
-        "matchdetails",
-        "matchmedia",
-        "matchnews",
-        "matchodds",
-        "leagueDataForMatch",
-        "audio-live-stream",
-        "tvlisting",
-        "live",
-        "score",
-        "event",
-        "stats",
-        "lineup",
-        "commentary",
-        "timeline",
-        "socket"
-    ]
-
-    for keyword in keywords:
-
-        if keyword in url_lower:
-            return True
-
-    return False
+    return current
 
 
-# =========================================================
+def extract_live_snapshot(data):
+    """
+    Extract only the important live information.
+    This keeps the output small.
+    """
+
+    if not isinstance(data, dict):
+        return None
+
+    general = data.get("general", {})
+    header = data.get("header", {})
+    teams = header.get("teams", [])
+    status = header.get("status", {})
+    events_root = data.get("events", {})
+
+    home_team = general.get("homeTeam", {})
+    away_team = general.get("awayTeam", {})
+
+    home_name = home_team.get("name")
+    away_name = away_team.get("name")
+
+    home_score = None
+    away_score = None
+
+    if len(teams) >= 2:
+        home_score = teams[0].get("score")
+        away_score = teams[1].get("score")
+
+    score_str = status.get("scoreStr")
+
+    live_time = status.get("liveTime", {})
+
+    # --------------------------------------------------------
+    # Events
+    # --------------------------------------------------------
+
+    all_events = []
+
+    try:
+        match_facts = data.get("content", {}).get("matchFacts", {})
+        event_container = match_facts.get("events", {})
+        all_events = event_container.get("events", []) or []
+    except Exception:
+        all_events = []
+
+    simplified_events = []
+
+    for event in all_events:
+        if not isinstance(event, dict):
+            continue
+
+        player = event.get("player") or {}
+
+        simplified_events.append({
+            "eventId": event.get("eventId"),
+            "type": event.get("type"),
+            "time": event.get("time"),
+            "timeStr": event.get("timeStr"),
+            "isHome": event.get("isHome"),
+            "player": player.get("name"),
+            "playerId": player.get("id"),
+            "newScore": event.get("newScore"),
+            "assist": event.get("assistStr"),
+            "ownGoal": event.get("ownGoal"),
+            "penalty": event.get("isPenaltyShootoutEvent")
+        })
+
+    # --------------------------------------------------------
+    # Stats / shotmap / lineup
+    # --------------------------------------------------------
+
+    stats = data.get("content", {}).get("stats")
+    player_stats = data.get("content", {}).get("playerStats")
+    shotmap = data.get("content", {}).get("shotmap")
+    lineup = data.get("content", {}).get("lineup")
+
+    shot_count = 0
+
+    if isinstance(shotmap, dict):
+        shots = shotmap.get("shots")
+        if isinstance(shots, list):
+            shot_count = len(shots)
+
+    return {
+        "capturedAt": now_iso(),
+
+        "matchId": MATCH_ID,
+
+        "teams": {
+            "home": home_name,
+            "away": away_name,
+            "homeId": home_team.get("id"),
+            "awayId": away_team.get("id")
+        },
+
+        "score": {
+            "home": home_score,
+            "away": away_score,
+            "display": score_str
+        },
+
+        "status": {
+            "started": status.get("started"),
+            "ongoing": status.get("ongoing"),
+            "finished": status.get("finished"),
+            "cancelled": status.get("cancelled")
+        },
+
+        "liveTime": {
+            "short": live_time.get("short"),
+            "long": live_time.get("long"),
+            "maxTime": live_time.get("maxTime"),
+            "basePeriod": live_time.get("basePeriod"),
+            "addedTime": live_time.get("addedTime")
+        },
+
+        "events": {
+            "count": len(simplified_events),
+            "items": simplified_events
+        },
+
+        "dataAvailability": {
+            "stats": stats is not None,
+            "playerStats": player_stats is not None,
+            "lineup": lineup is not None,
+            "shotmap": shotmap is not None,
+            "shotCount": shot_count
+        }
+    }
+
+
+# ============================================================
 # MAIN
-# =========================================================
+# ============================================================
 
 async def main():
 
-    # -----------------------------------------------------
-    # Storage
-    # -----------------------------------------------------
-
-    requests = []
-
-    responses = []
-
-    response_bodies = []
-
-    websocket_data = []
-
-
-    # -----------------------------------------------------
-    # Session directory
-    # -----------------------------------------------------
-
-    session_name = datetime.now(
-        timezone.utc
-    ).strftime(
+    session_name = datetime.now(timezone.utc).strftime(
         "%Y-%m-%dT%H-%M-%S"
     )
 
-    session_dir = (
-        LIVE_DIR /
-        session_name
-    )
+    session_dir = os.path.join(LIVE_DIR, session_name)
+    os.makedirs(session_dir, exist_ok=True)
 
-    session_dir.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    print("=" * 60)
+    print("FOTMOB LIVE CHANGE MONITOR")
+    print("=" * 60)
 
+    print("URL:", TARGET_URL)
+    print("MATCH ID:", MATCH_ID)
+    print("MONITOR:", MONITOR_SECONDS, "seconds")
+    print()
 
-    # -----------------------------------------------------
-    # Start information
-    # -----------------------------------------------------
+    snapshots = []
+    changes = []
 
-    print("")
-    print("=" * 70)
-    print("FOTMOB LIVE API MONITOR")
-    print("=" * 70)
+    last_snapshot_signature = None
 
-    print(
-        "TARGET URL:",
-        TARGET_URL
-    )
-
-    print(
-        "MATCH ID:",
-        MATCH_ID
-    )
-
-    print(
-        "MONITOR:",
-        MONITOR_SECONDS,
-        "seconds"
-    )
-
-    print("=" * 70)
-    print("")
-
-
-    # =====================================================
-    # PLAYWRIGHT
-    # =====================================================
+    match_details_count = 0
 
     async with async_playwright() as p:
 
         browser = await p.chromium.launch(
-
             headless=True,
-
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu"
+                "--disable-dev-shm-usage"
             ]
         )
 
-
-        # -------------------------------------------------
-        # Browser context
-        # -------------------------------------------------
-
         context = await browser.new_context(
-
-            user_agent=(
-                "Mozilla/5.0 "
-                "(X11; Linux x86_64) "
-                "AppleWebKit/537.36 "
-                "(KHTML, like Gecko) "
-                "Chrome/128.0.0.0 "
-                "Safari/537.36"
-            ),
-
             viewport={
-                "width": 1440,
-                "height": 900
-            },
-
-            locale="en-US",
-
-            timezone_id="Europe/Copenhagen"
+                "width": 1280,
+                "height": 720
+            }
         )
-
 
         page = await context.new_page()
 
+        async def handle_response(response):
 
-        # =================================================
-        # REQUEST LISTENER
-        # =================================================
+            nonlocal match_details_count
+            nonlocal last_snapshot_signature
 
-        async def handle_request(request):
+            url = response.url
 
-            try:
+            if "api/data/matchDetails" not in url:
+                return
 
-                url = request.url
+            if f"matchId={MATCH_ID}" not in url:
+                return
 
-                resource_type = (
-                    request.resource_type
-                )
+            match_details_count += 1
 
+            timestamp = now_iso()
 
-                if not is_interesting(
-                    url,
-                    resource_type
-                ):
-
-                    return
-
-
-                item = {
-
-                    "time":
-                        now(),
-
-                    "method":
-                        request.method,
-
-                    "url":
-                        url,
-
-                    "resourceType":
-                        resource_type,
-
-                    "headers":
-                        await request.all_headers()
-                }
-
-
-                requests.append(
-                    item
-                )
-
-
-                print(
-                    "[REQUEST]",
-                    request.method,
-                    resource_type,
-                    url
-                )
-
-
-            except Exception as error:
-
-                print(
-                    "[REQUEST ERROR]",
-                    str(error)
-                )
-
-
-        page.on(
-            "request",
-            handle_request
-        )
-
-
-        # =================================================
-        # RESPONSE LISTENER
-        # =================================================
-
-        async def handle_response(
-            response
-        ):
+            print(
+                f"[MATCH DETAILS #{match_details_count}] "
+                f"{timestamp}"
+            )
 
             try:
+                body = await response.text()
+            except Exception as e:
+                print("Could not read response:", e)
+                return
 
-                url = response.url
+            data = safe_json_loads(body)
 
+            if data is None:
+                print("Response was not valid JSON.")
+                return
 
-                try:
+            snapshot = extract_live_snapshot(data)
 
-                    resource_type = (
-                        response.request.resource_type
-                    )
+            if snapshot is None:
+                return
 
-                except Exception:
+            snapshot["responseNumber"] = match_details_count
+            snapshot["responseTime"] = timestamp
 
-                    resource_type = ""
+            snapshots.append(snapshot)
 
+            # ------------------------------------------------
+            # Create compact signature
+            # ------------------------------------------------
 
-                if not is_interesting(
-                    url,
-                    resource_type
-                ):
-
-                    return
-
-
-                headers = (
-                    await response.all_headers()
-                )
-
-
-                content_type = (
-                    headers.get(
-                        "content-type",
-                        ""
-                    )
-                )
-
-
-                item = {
-
-                    "time":
-                        now(),
-
-                    "status":
-                        response.status,
-
-                    "url":
-                        url,
-
-                    "resourceType":
-                        resource_type,
-
-                    "contentType":
-                        content_type,
-
-                    "headers":
-                        headers
-                }
-
-
-                responses.append(
-                    item
-                )
-
-
-                print(
-                    "[RESPONSE]",
-                    response.status,
-                    resource_type,
-                    url
-                )
-
-
-                # =========================================
-                # CAPTURE BODY
-                # =========================================
-
-                content_lower = (
-                    content_type.lower()
-                )
-
-
-                if any(
-                    x in content_lower
-                    for x in [
-                        "json",
-                        "text",
-                        "javascript"
-                    ]
-                ):
-
-                    try:
-
-                        body = await response.text()
-
-
-                        body_item = {
-
-                            "time":
-                                now(),
-
-                            "status":
-                                response.status,
-
-                            "url":
-                                url,
-
-                            "resourceType":
-                                resource_type,
-
-                            "contentType":
-                                content_type,
-
-                            "body":
-                                body
-                        }
-
-
-                        response_bodies.append(
-                            body_item
-                        )
-
-
-                        # =================================
-                        # SAVE MATCH DETAILS
-                        # =================================
-
-                        if (
-                            "matchdetails"
-                            in url.lower()
-                            and MATCH_ID
-                            in url
-                        ):
-
-                            match_file = (
-                                LATEST_DIR /
-                                "matchDetails.json"
-                            )
-
-
-                            try:
-
-                                parsed = json.loads(
-                                    body
-                                )
-
-
-                                match_file.write_text(
-
-                                    json.dumps(
-                                        parsed,
-                                        indent=2,
-                                        ensure_ascii=False
-                                    ),
-
-                                    encoding="utf-8"
-                                )
-
-
-                                print(
-                                    "[MATCH DETAILS SAVED]"
-                                )
-
-
-                            except Exception:
-
-                                raw_file = (
-                                    LATEST_DIR /
-                                    "matchDetails_raw.txt"
-                                )
-
-
-                                raw_file.write_text(
-
-                                    body,
-
-                                    encoding="utf-8"
-                                )
-
-
-                                print(
-                                    "[MATCH DETAILS RAW SAVED]"
-                                )
-
-
-                    except Exception as error:
-
-                        print(
-                            "[BODY ERROR]",
-                            str(error)
-                        )
-
-
-            except Exception as error:
-
-                print(
-                    "[RESPONSE ERROR]",
-                    str(error)
-                )
-
-
-        page.on(
-            "response",
-            handle_response
-        )
-
-
-        # =================================================
-        # WEBSOCKET
-        # =================================================
-
-        def handle_websocket(ws):
-
-            socket_item = {
-
-                "openedAt":
-                    now(),
-
-                "url":
-                    ws.url,
-
-                "events":
-                    []
+            signature_data = {
+                "score": snapshot["score"],
+                "status": snapshot["status"],
+                "liveTime": snapshot["liveTime"],
+                "events": snapshot["events"],
+                "dataAvailability": snapshot["dataAvailability"]
             }
 
-
-            websocket_data.append(
-                socket_item
+            signature = json.dumps(
+                signature_data,
+                sort_keys=True,
+                ensure_ascii=False
             )
 
+            # ------------------------------------------------
+            # Detect change
+            # ------------------------------------------------
 
-            print(
-                "[WEBSOCKET OPEN]",
-                ws.url
-            )
+            if last_snapshot_signature is None:
 
+                change_type = "INITIAL"
 
-            # ---------------------------------------------
-            # Received frame
-            # ---------------------------------------------
-
-            def received(message):
-
-                socket_item[
-                    "events"
-                ].append({
-
-                    "time":
-                        now(),
-
-                    "direction":
-                        "received",
-
-                    "data":
-                        str(message)[
-                            :50000
-                        ]
+                changes.append({
+                    "time": timestamp,
+                    "responseNumber": match_details_count,
+                    "changeType": change_type,
+                    "snapshot": snapshot
                 })
 
+                print("  -> INITIAL SNAPSHOT")
 
-                print(
-                    "[WS RECEIVED]",
-                    ws.url
-                )
+            elif signature != last_snapshot_signature:
 
+                change_type = "CHANGED"
 
-            # ---------------------------------------------
-            # Sent frame
-            # ---------------------------------------------
-
-            def sent(message):
-
-                socket_item[
-                    "events"
-                ].append({
-
-                    "time":
-                        now(),
-
-                    "direction":
-                        "sent",
-
-                    "data":
-                        str(message)[
-                            :50000
-                        ]
+                changes.append({
+                    "time": timestamp,
+                    "responseNumber": match_details_count,
+                    "changeType": change_type,
+                    "snapshot": snapshot
                 })
 
+                print("  -> LIVE DATA CHANGED")
 
-                print(
-                    "[WS SENT]",
-                    ws.url
-                )
+            else:
 
+                print("  -> NO CHANGE")
 
-            ws.on(
-                "framereceived",
-                received
-            )
+            last_snapshot_signature = signature
 
-            ws.on(
-                "framesent",
-                sent
-            )
+        page.on("response", handle_response)
 
-
-        page.on(
-            "websocket",
-            handle_websocket
-        )
-
-
-        # =================================================
-        # PAGE CONSOLE
-        # =================================================
-
-        def handle_console(message):
-
-            text = message.text
-
-            keywords = [
-                "match",
-                "score",
-                "live",
-                "socket",
-                "goal",
-                "event"
-            ]
-
-
-            if any(
-                keyword in text.lower()
-                for keyword in keywords
-            ):
-
-                print(
-                    "[PAGE]",
-                    text
-                )
-
-
-        page.on(
-            "console",
-            handle_console
-        )
-
-
-        # =================================================
-        # PAGE ERROR
-        # =================================================
-
-        def handle_page_error(error):
-
-            print(
-                "[PAGE ERROR]",
-                str(error)
-            )
-
-
-        page.on(
-            "pageerror",
-            handle_page_error
-        )
-
-
-        # =================================================
-        # OPEN FOTMOB
-        # =================================================
-
-        print(
-            "[OPENING FOTMOB]"
-        )
-
+        print("Opening FotMob...")
 
         try:
-
             await page.goto(
-
                 TARGET_URL,
-
                 wait_until="domcontentloaded",
-
                 timeout=60000
             )
+        except Exception as e:
+            print("Page navigation warning:", e)
 
+        print("Page opened.")
+        print()
 
-        except Exception as error:
+        # Give the page time to load initial APIs.
+        await page.wait_for_timeout(10000)
 
-            print(
-                "[PAGE LOAD ERROR]",
-                str(error)
-            )
-
-
-        # =================================================
-        # INITIAL LOAD WAIT
-        # =================================================
-
-        print(
-            "[WAITING FOR INITIAL API DATA]"
-        )
-
-
-        await page.wait_for_timeout(
-            10000
-        )
-
-
-        print("")
-        print(
-            "[LIVE MONITORING STARTED]"
-        )
-        print("")
-
-
-        # =================================================
-        # MONITOR
-        # =================================================
-
-        start = (
-            asyncio.get_event_loop().time()
-        )
-
-        last_report = -1
-
+        start_time = asyncio.get_event_loop().time()
 
         while True:
 
-            elapsed = (
+            elapsed = asyncio.get_event_loop().time() - start_time
 
-                asyncio
-                .get_event_loop()
-                .time()
-
-                - start
-            )
-
-
-            if (
-                elapsed
-                >= MONITOR_SECONDS
-            ):
-
+            if elapsed >= MONITOR_SECONDS:
                 break
 
+            remaining = MONITOR_SECONDS - elapsed
+
+            print(
+                f"Monitoring... "
+                f"{int(elapsed)}s / {MONITOR_SECONDS}s"
+            )
 
             await asyncio.sleep(
-                1
+                min(10, remaining)
             )
 
+        print()
+        print("Monitoring finished.")
 
-            seconds = int(
-                elapsed
-            )
-
-
-            # Every 10 seconds
-            if (
-
-                seconds % 10 == 0
-
-                and seconds != last_report
-
-            ):
-
-                last_report = seconds
-
-
-                print(
-
-                    "[MONITOR]",
-
-                    f"{seconds}s",
-
-                    "| requests:",
-                    len(requests),
-
-                    "| responses:",
-                    len(responses),
-
-                    "| bodies:",
-                    len(response_bodies),
-
-                    "| websockets:",
-                    len(websocket_data)
-                )
-
-
-        # =================================================
-        # SAVE SESSION FILES
-        # =================================================
-
-        session_files = {
-
-            "requests.json":
-                requests,
-
-            "responses.json":
-                responses,
-
-            "response_bodies.json":
-                response_bodies,
-
-            "websockets.json":
-                websocket_data
-        }
-
-
-        for filename, data in (
-            session_files.items()
-        ):
-
-            file_path = (
-                session_dir /
-                filename
-            )
-
-
-            file_path.write_text(
-
-                json.dumps(
-                    data,
-                    indent=2,
-                    ensure_ascii=False
-                ),
-
-                encoding="utf-8"
-            )
-
-
-        # =================================================
-        # FIND MATCH DETAILS RESPONSES
-        # =================================================
-
-        match_details_responses = [
-
-            response
-
-            for response
-            in responses
-
-            if (
-                "matchdetails"
-                in response["url"].lower()
-            )
-        ]
-
-
-        # =================================================
-        # FIND ALL API URLS
-        # =================================================
-
-        unique_urls = sorted(
-            set(
-                response["url"]
-                for response
-                in responses
-            )
-        )
-
-
-        # =================================================
-        # MATCH DETAILS RESPONSE TIMES
-        # =================================================
-
-        match_details_times = []
-
-        for response in (
-            match_details_responses
-        ):
-
-            match_details_times.append({
-
-                "time":
-                    response["time"],
-
-                "status":
-                    response["status"],
-
-                "url":
-                    response["url"]
-            })
-
-
-        # =================================================
-        # SUMMARY
-        # =================================================
-
-        summary = {
-
-            "targetUrl":
-                TARGET_URL,
-
-            "matchId":
-                MATCH_ID,
-
-            "monitorSeconds":
-                MONITOR_SECONDS,
-
-            "startedAt":
-                session_name,
-
-            "finishedAt":
-                now(),
-
-            "totalRequests":
-                len(requests),
-
-            "totalResponses":
-                len(responses),
-
-            "totalResponseBodies":
-                len(response_bodies),
-
-            "websocketConnections":
-                len(websocket_data),
-
-            "uniqueResponseUrls":
-                len(unique_urls),
-
-            "matchDetailsResponses":
-                len(match_details_responses),
-
-            "matchDetailsUpdates":
-                match_details_times,
-
-            "matchDetailsUrls":
-                sorted(
-                    set(
-                        response["url"]
-
-                        for response
-                        in match_details_responses
-                    )
-                )
-        }
-
-
-        # =================================================
-        # SAVE SUMMARY
-        # =================================================
-
-        summary_file = (
-            session_dir /
-            "summary.json"
-        )
-
-
-        summary_file.write_text(
-
-            json.dumps(
-                summary,
-                indent=2,
-                ensure_ascii=False
-            ),
-
-            encoding="utf-8"
-        )
-
-
-        # =================================================
-        # COPY LATEST
-        # =================================================
-
-        for filename in [
-
-            "requests.json",
-
-            "responses.json",
-
-            "response_bodies.json",
-
-            "websockets.json",
-
-            "summary.json"
-
-        ]:
-
-            source = (
-                session_dir /
-                filename
-            )
-
-
-            destination = (
-                LATEST_DIR /
-                filename
-            )
-
-
-            if source.exists():
-
-                destination.write_bytes(
-                    source.read_bytes()
-                )
-
-
-        # =================================================
-        # CLOSE
-        # =================================================
-
+        await context.close()
         await browser.close()
 
+    # ========================================================
+    # SAVE COMPACT RESULTS
+    # ========================================================
 
-        # =================================================
-        # FINAL OUTPUT
-        # =================================================
+    snapshots_file = os.path.join(
+        session_dir,
+        "live_snapshots.json"
+    )
 
-        print("")
-        print("=" * 70)
-        print("MONITORING FINISHED")
-        print("=" * 70)
+    changes_file = os.path.join(
+        session_dir,
+        "live_changes.json"
+    )
 
-        print(
-            json.dumps(
-                summary,
-                indent=2,
-                ensure_ascii=False
-            )
+    latest_file = os.path.join(
+        LATEST_DIR,
+        "live_changes.json"
+    )
+
+    with open(
+        snapshots_file,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            snapshots,
+            f,
+            ensure_ascii=False,
+            indent=2
         )
 
-        print("")
-        print(
-            "Files saved in:"
+    with open(
+        changes_file,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            changes,
+            f,
+            ensure_ascii=False,
+            indent=2
         )
 
-        print(
-            "data/latest/"
+    shutil.copy2(
+        changes_file,
+        latest_file
+    )
+
+    # ========================================================
+    # SUMMARY
+    # ========================================================
+
+    summary = {
+        "targetUrl": TARGET_URL,
+        "matchId": MATCH_ID,
+        "monitorSeconds": MONITOR_SECONDS,
+
+        "matchDetailsResponses": match_details_count,
+
+        "snapshotsCaptured": len(snapshots),
+
+        "changesDetected": len(changes),
+
+        "files": {
+            "snapshots": snapshots_file,
+            "changes": changes_file
+        }
+    }
+
+    summary_file = os.path.join(
+        session_dir,
+        "live_change_summary.json"
+    )
+
+    latest_summary = os.path.join(
+        LATEST_DIR,
+        "live_change_summary.json"
+    )
+
+    with open(
+        summary_file,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            summary,
+            f,
+            ensure_ascii=False,
+            indent=2
         )
 
+    shutil.copy2(
+        summary_file,
+        latest_summary
+    )
 
-# =========================================================
-# RUN
-# =========================================================
+    # ========================================================
+    # PRINT RESULT
+    # ========================================================
+
+    print()
+    print("=" * 60)
+    print("RESULT")
+    print("=" * 60)
+
+    print(
+        "matchDetails responses:",
+        match_details_count
+    )
+
+    print(
+        "snapshots:",
+        len(snapshots)
+    )
+
+    print(
+        "changes detected:",
+        len(changes)
+    )
+
+    print()
+    print("Files:")
+    print(changes_file)
+    print(latest_file)
+    print(latest_summary)
+
+    print()
+    print("DONE.")
+
 
 if __name__ == "__main__":
-
-    asyncio.run(
-        main()
-    )
+    asyncio.run(main())
