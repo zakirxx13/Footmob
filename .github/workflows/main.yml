@@ -3,779 +3,181 @@ name: FotMob Live API Monitor
 on:
   workflow_dispatch:
 
-  # প্রতি 5 মিনিটে একটি নতুন monitoring session চালাবে
   schedule:
     - cron: "*/5 * * * *"
 
 permissions:
   contents: write
 
-env:
-  TARGET_URL: "https://www.fotmob.com/matches/japan-u23-vs-north-korea-u23/5fehyhkv#6303284"
-  MATCH_ID: "6303284"
-  MONITOR_SECONDS: "120"
-
 jobs:
+
   monitor:
+
     runs-on: ubuntu-latest
 
     steps:
 
-      # --------------------------------------------------
-      # 1. Checkout repository
-      # --------------------------------------------------
+      # ============================================
+      # 1. CHECKOUT
+      # ============================================
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --------------------------------------------------
-      # 2. Setup Node.js
-      # --------------------------------------------------
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+
+      # ============================================
+      # 2. SETUP PYTHON
+      # ============================================
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          node-version: 20
+          python-version: "3.11"
 
-      # --------------------------------------------------
-      # 3. Install dependencies
-      # --------------------------------------------------
-      - name: Install dependencies
+
+      # ============================================
+      # 3. INSTALL PLAYWRIGHT
+      # ============================================
+
+      - name: Install Playwright
         run: |
-          npm init -y
-          npm install playwright
 
-      # --------------------------------------------------
-      # 4. Install Chromium
-      # --------------------------------------------------
+          python -m pip install --upgrade pip
+
+          pip install playwright
+
+
+      # ============================================
+      # 4. INSTALL CHROMIUM
+      # ============================================
+
       - name: Install Chromium
         run: |
-          npx playwright install chromium
-          npx playwright install-deps chromium
 
-      # --------------------------------------------------
-      # 5. Create directories
-      # --------------------------------------------------
-      - name: Create data directories
+          python -m playwright install chromium
+
+          python -m playwright install-deps chromium
+
+
+      # ============================================
+      # 5. CHECK f.py
+      # ============================================
+
+      - name: Check f.py
         run: |
-          mkdir -p data/live
-          mkdir -p data/latest
-          mkdir -p scripts
 
-      # --------------------------------------------------
-      # 6. Create monitor script
-      # --------------------------------------------------
-      - name: Create monitor script
+          echo "Checking scripts/f.py..."
+
+          test -f scripts/f.py
+
+          python -m py_compile scripts/f.py
+
+          echo "f.py is valid."
+
+
+      # ============================================
+      # 6. RUN f.py
+      # ============================================
+
+      - name: Run FotMob monitor
         run: |
-          cat > scripts/fotmob-live-monitor.js <<'EOF'
 
-          const { chromium } = require("playwright");
-          const fs = require("fs");
-          const path = require("path");
+          python scripts/f.py
 
-          const TARGET_URL =
-            process.env.TARGET_URL ||
-            "https://www.fotmob.com/matches/japan-u23-vs-north-korea-u23/5fehyhkv#6303284";
 
-          const MATCH_ID =
-            process.env.MATCH_ID || "6303284";
+      # ============================================
+      # 7. SHOW SUMMARY
+      # ============================================
 
-          const MONITOR_SECONDS =
-            Number(process.env.MONITOR_SECONDS || 120);
-
-          const startedAt = new Date();
-
-          const outputDir = path.join(
-            process.cwd(),
-            "data",
-            "live"
-          );
-
-          const latestDir = path.join(
-            process.cwd(),
-            "data",
-            "latest"
-          );
-
-          fs.mkdirSync(outputDir, {
-            recursive: true
-          });
-
-          fs.mkdirSync(latestDir, {
-            recursive: true
-          });
-
-          const timestamp =
-            startedAt.toISOString()
-              .replace(/[:.]/g, "-");
-
-          const sessionDir =
-            path.join(outputDir, timestamp);
-
-          fs.mkdirSync(sessionDir, {
-            recursive: true
-          });
-
-          const requests = [];
-          const responses = [];
-          const responseBodies = [];
-          const websocketEvents = [];
-
-          function isInteresting(url, resourceType) {
-
-            const lower = url.toLowerCase();
-
-            if (
-              resourceType === "xhr" ||
-              resourceType === "fetch" ||
-              resourceType === "websocket"
-            ) {
-              return true;
-            }
-
-            const keywords = [
-              "/api/",
-              "matchdetails",
-              "matchmedia",
-              "live",
-              "score",
-              "event",
-              "stats",
-              "lineup",
-              "commentary",
-              "timeline",
-              "websocket",
-              "socket"
-            ];
-
-            return keywords.some(k =>
-              lower.includes(k)
-            );
-          }
-
-          function safeFileName(url) {
-
-            return url
-              .replace(/^https?:\/\//, "")
-              .replace(/[^a-zA-Z0-9_-]/g, "_")
-              .slice(0, 180);
-          }
-
-          const browser = await chromium.launch({
-            headless: true,
-            args: [
-              "--no-sandbox",
-              "--disable-setuid-sandbox",
-              "--disable-dev-shm-usage"
-            ]
-          });
-
-          const context = await browser.newContext({
-            userAgent:
-              "Mozilla/5.0 (X11; Linux x86_64) " +
-              "AppleWebKit/537.36 " +
-              "(KHTML, like Gecko) " +
-              "Chrome/128.0.0.0 Safari/537.36",
-
-            viewport: {
-              width: 1440,
-              height: 900
-            },
-
-            locale: "en-US"
-          });
-
-          const page = await context.newPage();
-
-          // ------------------------------------------------
-          // REQUEST LISTENER
-          // ------------------------------------------------
-
-          page.on("request", request => {
-
-            const url = request.url();
-            const type = request.resourceType();
-
-            if (!isInteresting(url, type)) {
-              return;
-            }
-
-            const item = {
-              time: new Date().toISOString(),
-              method: request.method(),
-              url: url,
-              resourceType: type,
-              headers: request.headers()
-            };
-
-            requests.push(item);
-
-            console.log(
-              "[REQUEST]",
-              request.method(),
-              type,
-              url
-            );
-          });
-
-          // ------------------------------------------------
-          // RESPONSE LISTENER
-          // ------------------------------------------------
-
-          page.on("response", async response => {
-
-            const url = response.url();
-            const type = response.request().resourceType();
-
-            if (!isInteresting(url, type)) {
-              return;
-            }
-
-            const contentType =
-              response.headers()["content-type"] || "";
-
-            const item = {
-              time: new Date().toISOString(),
-              status: response.status(),
-              url: url,
-              resourceType: type,
-              contentType: contentType,
-              headers: response.headers()
-            };
-
-            responses.push(item);
-
-            console.log(
-              "[RESPONSE]",
-              response.status(),
-              type,
-              url
-            );
-
-            // ------------------------------------------------
-            // Capture JSON / text response body
-            // ------------------------------------------------
-
-            if (
-              contentType.includes("json") ||
-              contentType.includes("text") ||
-              contentType.includes("javascript")
-            ) {
-
-              try {
-
-                const body =
-                  await response.text();
-
-                const bodyItem = {
-                  time: new Date().toISOString(),
-                  status: response.status(),
-                  url: url,
-                  resourceType: type,
-                  contentType: contentType,
-                  body: body
-                };
-
-                responseBodies.push(bodyItem);
-
-                // --------------------------------------------
-                // Save matchDetails separately
-                // --------------------------------------------
-
-                if (
-                  url.includes("matchDetails") &&
-                  url.includes(MATCH_ID)
-                ) {
-
-                  const file =
-                    path.join(
-                      latestDir,
-                      "matchDetails.json"
-                    );
-
-                  try {
-
-                    const parsed =
-                      JSON.parse(body);
-
-                    fs.writeFileSync(
-                      file,
-                      JSON.stringify(
-                        parsed,
-                        null,
-                        2
-                      )
-                    );
-
-                    console.log(
-                      "[MATCH DETAILS SAVED]",
-                      file
-                    );
-
-                  } catch (e) {
-
-                    fs.writeFileSync(
-                      path.join(
-                        latestDir,
-                        "matchDetails_raw.txt"
-                      ),
-                      body
-                    );
-
-                    console.log(
-                      "[MATCH DETAILS RAW SAVED]"
-                    );
-                  }
-                }
-
-              } catch (error) {
-
-                console.log(
-                  "[BODY ERROR]",
-                  error.message
-                );
-              }
-            }
-          });
-
-          // ------------------------------------------------
-          // WEBSOCKET
-          // ------------------------------------------------
-
-          page.on("websocket", ws => {
-
-            const wsUrl = ws.url();
-
-            console.log(
-              "[WEBSOCKET OPEN]",
-              wsUrl
-            );
-
-            const socket = {
-              time: new Date().toISOString(),
-              url: wsUrl,
-              events: []
-            };
-
-            websocketEvents.push(socket);
-
-            ws.on("framesent", data => {
-
-              socket.events.push({
-                time: new Date().toISOString(),
-                direction: "sent",
-                data: String(data).slice(0, 50000)
-              });
-
-            });
-
-            ws.on("framereceived", data => {
-
-              socket.events.push({
-                time: new Date().toISOString(),
-                direction: "received",
-                data: String(data).slice(0, 50000)
-              });
-
-            });
-
-            ws.on("close", () => {
-
-              socket.closedAt =
-                new Date().toISOString();
-
-              console.log(
-                "[WEBSOCKET CLOSED]",
-                wsUrl
-              );
-
-            });
-
-          });
-
-          // ------------------------------------------------
-          // CONSOLE
-          // ------------------------------------------------
-
-          page.on("console", message => {
-
-            const text = message.text();
-
-            if (
-              text.includes("match") ||
-              text.includes("score") ||
-              text.includes("live") ||
-              text.includes("socket")
-            ) {
-
-              console.log(
-                "[PAGE]",
-                text
-              );
-            }
-          });
-
-          // ------------------------------------------------
-          // PAGE ERRORS
-          // ------------------------------------------------
-
-          page.on("pageerror", error => {
-
-            console.log(
-              "[PAGE ERROR]",
-              error.message
-            );
-
-          });
-
-          // ------------------------------------------------
-          // OPEN FOTMOB
-          // ------------------------------------------------
-
-          console.log("");
-          console.log("========================================");
-          console.log("FOTMOB LIVE MONITOR");
-          console.log("========================================");
-          console.log("URL:", TARGET_URL);
-          console.log("MATCH ID:", MATCH_ID);
-          console.log(
-            "MONITOR:",
-            MONITOR_SECONDS,
-            "seconds"
-          );
-          console.log("========================================");
-          console.log("");
-
-          try {
-
-            await page.goto(
-              TARGET_URL,
-              {
-                waitUntil: "domcontentloaded",
-                timeout: 60000
-              }
-            );
-
-          } catch (error) {
-
-            console.log(
-              "[PAGE LOAD ERROR]",
-              error.message
-            );
-
-          }
-
-          // ------------------------------------------------
-          // Wait for initial API calls
-          // ------------------------------------------------
-
-          await page.waitForTimeout(10000);
-
-          console.log("");
-          console.log(
-            "[MONITORING STARTED]"
-          );
-          console.log("");
-
-          // ------------------------------------------------
-          // Keep page alive
-          // ------------------------------------------------
-
-          const startTime = Date.now();
-
-          while (
-            Date.now() - startTime <
-            MONITOR_SECONDS * 1000
-          ) {
-
-            await page.waitForTimeout(1000);
-
-            const elapsed =
-              Math.floor(
-                (Date.now() - startTime) / 1000
-              );
-
-            if (elapsed % 10 === 0) {
-
-              console.log(
-                "[MONITOR]",
-                elapsed + "s",
-                "requests:",
-                requests.length,
-                "responses:",
-                responses.length,
-                "bodies:",
-                responseBodies.length
-              );
-            }
-          }
-
-          console.log("");
-          console.log(
-            "[MONITORING FINISHED]"
-          );
-          console.log("");
-
-          // ------------------------------------------------
-          // Save session files
-          // ------------------------------------------------
-
-          fs.writeFileSync(
-            path.join(
-              sessionDir,
-              "requests.json"
-            ),
-            JSON.stringify(
-              requests,
-              null,
-              2
-            )
-          );
-
-          fs.writeFileSync(
-            path.join(
-              sessionDir,
-              "responses.json"
-            ),
-            JSON.stringify(
-              responses,
-              null,
-              2
-            )
-          );
-
-          fs.writeFileSync(
-            path.join(
-              sessionDir,
-              "response_bodies.json"
-            ),
-            JSON.stringify(
-              responseBodies,
-              null,
-              2
-            )
-          );
-
-          fs.writeFileSync(
-            path.join(
-              sessionDir,
-              "websockets.json"
-            ),
-            JSON.stringify(
-              websocketEvents,
-              null,
-              2
-            )
-          );
-
-          // ------------------------------------------------
-          // Summary
-          // ------------------------------------------------
-
-          const apiUrls = [
-            ...new Set(
-              responses.map(
-                item => item.url
-              )
-            )
-          ];
-
-          const matchDetailsResponses =
-            responses.filter(
-              item =>
-                item.url.includes(
-                  "matchDetails"
-                )
-            );
-
-          const summary = {
-
-            targetUrl: TARGET_URL,
-
-            matchId: MATCH_ID,
-
-            startedAt:
-              startedAt.toISOString(),
-
-            finishedAt:
-              new Date().toISOString(),
-
-            monitorSeconds:
-              MONITOR_SECONDS,
-
-            totalRequests:
-              requests.length,
-
-            totalResponses:
-              responses.length,
-
-            totalResponseBodies:
-              responseBodies.length,
-
-            websocketConnections:
-              websocketEvents.length,
-
-            uniqueApiUrls:
-              apiUrls.length,
-
-            matchDetailsResponseCount:
-              matchDetailsResponses.length,
-
-            matchDetailsUrls:
-              [
-                ...new Set(
-                  matchDetailsResponses.map(
-                    item => item.url
-                  )
-                )
-              ]
-
-          };
-
-          fs.writeFileSync(
-            path.join(
-              sessionDir,
-              "summary.json"
-            ),
-            JSON.stringify(
-              summary,
-              null,
-              2
-            )
-          );
-
-          // ------------------------------------------------
-          // Copy important files to latest
-          // ------------------------------------------------
-
-          fs.copyFileSync(
-            path.join(
-              sessionDir,
-              "requests.json"
-            ),
-            path.join(
-              latestDir,
-              "requests.json"
-            )
-          );
-
-          fs.copyFileSync(
-            path.join(
-              sessionDir,
-              "responses.json"
-            ),
-            path.join(
-              latestDir,
-              "responses.json"
-            )
-          );
-
-          fs.copyFileSync(
-            path.join(
-              sessionDir,
-              "response_bodies.json"
-            ),
-            path.join(
-              latestDir,
-              "response_bodies.json"
-            )
-          );
-
-          fs.copyFileSync(
-            path.join(
-              sessionDir,
-              "websockets.json"
-            ),
-            path.join(
-              latestDir,
-              "websockets.json"
-            )
-          );
-
-          fs.copyFileSync(
-            path.join(
-              sessionDir,
-              "summary.json"
-            ),
-            path.join(
-              latestDir,
-              "summary.json"
-            )
-          );
-
-          console.log("");
-          console.log(
-            "========================================"
-          );
-          console.log(
-            "RESULT"
-          );
-          console.log(
-            "========================================"
-          );
-
-          console.log(
-            JSON.stringify(
-              summary,
-              null,
-              2
-            )
-          );
-
-          await browser.close();
-
-          EOF
-
-      # --------------------------------------------------
-      # 7. Run monitor
-      # --------------------------------------------------
-      - name: Run FotMob live monitor
-        env:
-          TARGET_URL: ${{ env.TARGET_URL }}
-          MATCH_ID: ${{ env.MATCH_ID }}
-          MONITOR_SECONDS: ${{ env.MONITOR_SECONDS }}
-        run: |
-          node scripts/fotmob-live-monitor.js
-
-      # --------------------------------------------------
-      # 8. Show important results
-      # --------------------------------------------------
       - name: Show summary
+        if: always()
         run: |
-          echo "===== SUMMARY ====="
-          cat data/latest/summary.json || true
 
-          echo ""
-          echo "===== MATCH DETAILS ====="
-          if [ -f data/latest/matchDetails.json ]; then
-            head -c 20000 data/latest/matchDetails.json
+          echo "============================================"
+
+          echo "FOTMOB MONITOR SUMMARY"
+
+          echo "============================================"
+
+          if [ -f data/latest/summary.json ]; then
+
+            cat data/latest/summary.json
+
           else
-            echo "matchDetails.json was not captured."
+
+            echo "summary.json not found."
+
           fi
 
-      # --------------------------------------------------
-      # 9. Commit results
-      # --------------------------------------------------
-      - name: Commit monitoring data
+
+      # ============================================
+      # 8. SHOW MATCH DETAILS
+      # ============================================
+
+      - name: Show matchDetails
+        if: always()
         run: |
+
+          echo "============================================"
+
+          echo "MATCH DETAILS"
+
+          echo "============================================"
+
+          if [ -f data/latest/matchDetails.json ]; then
+
+            cat data/latest/matchDetails.json
+
+          else
+
+            echo "matchDetails.json not found."
+
+          fi
+
+
+      # ============================================
+      # 9. COMMIT DATA
+      # ============================================
+
+      - name: Commit data
+        if: always()
+        run: |
+
           git config user.name "github-actions[bot]"
+
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/ scripts/
+          git add data/
 
           if git diff --cached --quiet; then
+
             echo "No changes to commit."
+
           else
-            git commit -m "Update FotMob live API monitoring data"
+
+            git commit -m "Update FotMob live data"
+
             git push
+
           fi
 
-      # --------------------------------------------------
-      # 10. Upload artifact
-      # --------------------------------------------------
-      - name: Upload monitoring artifact
+
+      # ============================================
+      # 10. UPLOAD ARTIFACT
+      # ============================================
+
+      - name: Upload monitoring data
+        if: always()
         uses: actions/upload-artifact@v4
+
         with:
+
           name: fotmob-live-monitor
+
           path: |
-            data/live/
+
             data/latest/
+
+            data/live/
+
           retention-days: 7
